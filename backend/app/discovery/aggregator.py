@@ -1,4 +1,4 @@
-"""
+﻿"""
 Unified discovery layer.
 Pulls early Pump.fun bonding-curve tokens (primary edge)
 and optionally enriches / merges with DexScreener.
@@ -11,6 +11,7 @@ from typing import Any
 
 from app.discovery.pumpfun import fetch_pumpfun_launches
 from app.discovery.dexscreener import enrich_token, discover_new_solana_pairs
+from app.providers.helius import enrich_holders
 
 
 async def discover_opportunities(
@@ -29,7 +30,7 @@ async def discover_opportunities(
 
     pump_tokens, dex_tokens = await asyncio.gather(pump_task, dex_task)
 
-    # Pump.fun first — that is the pre-terminal edge
+    # Pump.fun first â€” that is the pre-terminal edge
     merged: list[dict] = []
     seen: set[str] = set()
 
@@ -71,4 +72,11 @@ async def discover_opportunities(
                     token["price_change_m5"] = extra.get("price_change_m5")
                     token["price_change_h1"] = extra.get("price_change_h1")
 
+    # Optional Helius holder concentration (no-op without API key)
+    try:
+        await enrich_holders(merged, max_tokens=min(12, len(merged)))
+    except Exception:
+        pass
+
     return merged[:limit]
+
