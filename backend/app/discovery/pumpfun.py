@@ -88,9 +88,15 @@ def normalize_coin(coin: dict) -> dict | None:
         return None
     if mcap > 0 and (mcap < settings.min_usd_mcap or mcap > settings.max_usd_mcap):
         return None
+    # Hybrid: bonding still filtered by curve band; graduated allowed in age window
     if stage == "bonding" and (
         curve_progress < settings.min_curve_progress
         or curve_progress > settings.max_curve_progress
+    ):
+        return None
+    # Just-graduated only if still young enough for hybrid post-grad window
+    if stage == "graduated" and age_minutes is not None and age_minutes > getattr(
+        settings, "hybrid_postgrad_max", 180
     ):
         return None
 
@@ -131,31 +137,48 @@ def normalize_coin(coin: dict) -> dict | None:
 
 
 async def fetch_pumpfun_launches(limit: int = 50) -> list[dict]:
-    """Fetch newest Pump.fun coins (still mostly on curve)."""
+    """Fetch newest Pump.fun launches using hybrid bonding + recent-graduation discovery."""
     settings = get_settings()
     url = f"{settings.pumpfun_base}/coins"
-    params = {
-        "offset": 0,
-        "limit": min(limit, 50),
-        "sort": "created_timestamp",
-        "order": "DESC",
-        "includeNsfw": "false",
-    }
+    page_size = 50
+    pages = 2  # ~100 newest mints for better coverage
 
+    raw: list[dict] = []
     async with httpx.AsyncClient(timeout=20.0) as client:
-        try:
-            resp = await client.get(url, params=params)
-            if resp.status_code != 200:
-                return []
-            data = resp.json()
-            if not isinstance(data, list):
-                return []
-        except Exception:
-            return []
+        for page in range(pages):
+            params = {
+                "offset": page * page_size,
+                "limit": page_size,
+                "sort": "created_timestamp",
+                "order": "DESC",
+                "includeNsfw": "false",
+            }
+            ok = False
+            for attempt in range(3):
+                try:
+                    resp = await client.get(url, params=params)
+                    if resp.status_code != 200:
+                        break
+                    data = resp.json()
+                    if not isinstance(data, list):
+                        break
+                    if not data:
+                        ok = True
+                        break
+                    raw.extend(data)
+                    ok = True
+                    break
+                except Exception:
+                    if attempt == 2:
+                        break
+                    import asyncio as _aio
+                    await _aio.sleep(0.4 * (attempt + 1))
+            if not ok:
+                break
 
     results = []
     seen = set()
-    for coin in data:
+    for coin in raw:
         normalized = normalize_coin(coin)
         if not normalized:
             continue
@@ -165,14 +188,28 @@ async def fetch_pumpfun_launches(limit: int = 50) -> list[dict]:
         seen.add(addr)
         results.append(normalized)
 
-    # Prefer still-on-curve, then youngest
-    results.sort(
-        key=lambda t: (
-            0 if t["stage"] == "bonding" else 1,
-            t.get("age_minutes") or 9999,
-        )
-    )
-    return results
+    # Hybrid preference: on-curve with chat, then graduating, then young graduated
+    def _pref(t):
+        age = t.get("age_minutes") or 9999
+        replies = t.get("reply_count") or 0
+        curve = t.get("curve_progress") or 0
+        stage = t.get("stage")
+        # lower is better
+        if stage == "bonding" and 6 <= age <= 45 and replies >= 3:
+            band = 0
+        elif stage == "bonding" and curve >= 70:
+            band = 1
+        elif stage == "bonding" and replies >= 1:
+            band = 2
+        elif stage == "graduated" and age <= 180:
+            band = 3
+        else:
+            band = 4
+        return (band, -replies, age)
+
+    results.sort(key=_pref)
+    return results[: max(limit, 50)]
+
 
 
 def fetch_pumpfun_launches_sync(limit: int = 50) -> list[dict]:
