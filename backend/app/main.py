@@ -117,52 +117,9 @@ _candidates = [
     Path(__file__).resolve().parent.parent / "frontend" / "dist",
     Path("/app/frontend/dist"),
 ]
-FRONTEND_DIST = next((p for p in _candidates if p.exists()), _candidates[0])
-
-
-def _serve_index():
-    index = FRONTEND_DIST / "index.html"
-    if index.exists():
-        return FileResponse(index)
-    return ORJSONResponse(
-        {
-            "name": settings.app_name,
-            "version": settings.version,
-            "message": "ASILI HAWK API online. Frontend not built in this image.",
-            "endpoints": [
-                "/api/health",
-                "/api/hawk",
-                "/api/prime",
-                "/api/top5",
-                "/api/radar/{graduation|momentum|risk|early}",
-                "/api/stats",
-            ],
-        }
-    )
-
-
-if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():
-    assets_dir = FRONTEND_DIST / "assets"
-    if assets_dir.exists():
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
-
-    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
-    async def spa_fallback(full_path: str):
-        if full_path.startswith("api/"):
-            return ORJSONResponse({"detail": "Not Found"}, status_code=404)
-        candidate = FRONTEND_DIST / full_path
-        if full_path and candidate.is_file():
-            return FileResponse(candidate)
-        return _serve_index()
-
-
-@app.api_route("/", methods=["GET", "HEAD"])
-async def root():
-    return _serve_index()
-
 
 from app.intelligence.journal import log_event, set_outcome, list_journal, journal_stats
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional
 
 
@@ -216,3 +173,46 @@ async def journal_list(limit: int = Query(default=50, ge=1, le=200)):
 async def journal_stats_route():
     return journal_stats()
 
+
+FRONTEND_DIST = next((p for p in _candidates if p.exists()), _candidates[0])
+
+
+def _serve_index():
+    index = FRONTEND_DIST / "index.html"
+    if index.exists():
+        return FileResponse(index)
+    return ORJSONResponse(
+        {
+            "name": settings.app_name,
+            "version": settings.version,
+            "message": "ASILI HAWK API online. Frontend not built in this image.",
+            "endpoints": [
+                "/api/health",
+                "/api/hawk",
+                "/api/prime",
+                "/api/top5",
+                "/api/radar/{graduation|momentum|risk|early}",
+                "/api/stats",
+            ],
+        }
+    )
+
+
+if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():
+    assets_dir = FRONTEND_DIST / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
+    async def spa_fallback(full_path: str):
+        if full_path.startswith("api/"):
+            return ORJSONResponse({"detail": "Not Found"}, status_code=404)
+        candidate = FRONTEND_DIST / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return _serve_index()
+
+
+@app.api_route("/", methods=["GET", "HEAD"])
+async def root():
+    return _serve_index()

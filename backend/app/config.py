@@ -4,7 +4,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     app_name: str = "ASILI HAWK"
-    version: str = "2.1.1-journal"
+    version: str = "2.1.2-journal"
     # Was True by default — fine for local dev, wrong default for a
     # deployed API (verbose errors/stack traces exposed to callers).
     debug: bool = False
