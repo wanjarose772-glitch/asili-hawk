@@ -189,6 +189,16 @@ function TokenCard({ token, rank }) {
         )}
       </div>
 
+      {token.developer_intel?.serial_deployer && (
+        <p className="mt-1 text-[10px] text-rose-400 font-medium">
+          SERIAL DEPLOYER · {token.developer_intel?.serial_rug_risk || "ELEVATED"} · {token.developer_intel?.launches_observed || "?"} mints seen
+        </p>
+      )}
+      {token.developer_intel?.journal_death_rate != null && token.developer_intel.journal_death_samples >= 3 && (
+        <p className="mt-1 text-[10px] text-rose-300">
+          Journal death rate {Math.round(token.developer_intel.journal_death_rate * 100)}% ({token.developer_intel.journal_death_samples} samples)
+        </p>
+      )}
       {token.convergence_label && (
         <p className="mt-2 text-[11px] text-violet-300/90">
           {token.convergence_label} · conv {token.convergence_score} · rel {token.reliability}
@@ -207,7 +217,110 @@ function TokenCard({ token, rank }) {
           ))}
         </ul>
       )}
+      
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] text-slate-300 hover:border-slate-500"
+          onClick={async () => {
+            try {
+              await api.logJournal({
+                action: "skip",
+                address: token.address,
+                ticker: token.ticker,
+                ladder: token.ladder,
+                entry_state: token.entry_state,
+                display_score: token.display_score,
+                convergence_score: token.convergence_score,
+                reliability: token.reliability,
+                hawk_score: token.hawk_score || token.alpha_score,
+                rug_risk: token.rug_risk,
+                market_cap: token.market_cap,
+                reply_count: token.reply_count,
+                age_minutes: token.age_minutes,
+                breakout_score: token.breakout_score,
+                lottery_score: token.lottery_score,
+                size_hint: token.size_hint,
+                convergence_label: token.convergence_label,
+                pattern_summary: token.pattern_summary,
+              });
+              alert("Logged SKIP");
+            } catch (e) {
+              alert("Journal failed");
+            }
+          }}
+        >
+          Log skip
+        </button>
+        <button
+          type="button"
+          className="rounded-md border border-fuchsia-700/50 bg-fuchsia-950/40 px-2 py-1 text-[10px] text-fuchsia-200 hover:border-fuchsia-500"
+          onClick={async () => {
+            try {
+              await api.logJournal({
+                action: "micro_entry",
+                address: token.address,
+                ticker: token.ticker,
+                ladder: token.ladder,
+                entry_state: token.entry_state,
+                display_score: token.display_score,
+                convergence_score: token.convergence_score,
+                reliability: token.reliability,
+                hawk_score: token.hawk_score || token.alpha_score,
+                rug_risk: token.rug_risk,
+                market_cap: token.market_cap,
+                reply_count: token.reply_count,
+                age_minutes: token.age_minutes,
+                breakout_score: token.breakout_score,
+                lottery_score: token.lottery_score,
+                size_hint: token.size_hint,
+                convergence_label: token.convergence_label,
+                pattern_summary: token.pattern_summary,
+              });
+              alert("Logged MICRO ENTRY — journal for outcome later");
+            } catch (e) {
+              alert("Journal failed");
+            }
+          }}
+        >
+          Log micro
+        </button>
+        <button
+          type="button"
+          className="rounded-md border border-amber-700/50 bg-amber-950/30 px-2 py-1 text-[10px] text-amber-200 hover:border-amber-500"
+          onClick={async () => {
+            try {
+              await api.logJournal({
+                action: "watch",
+                address: token.address,
+                ticker: token.ticker,
+                ladder: token.ladder,
+                entry_state: token.entry_state,
+                display_score: token.display_score,
+                convergence_score: token.convergence_score,
+                reliability: token.reliability,
+                hawk_score: token.hawk_score || token.alpha_score,
+                rug_risk: token.rug_risk,
+                market_cap: token.market_cap,
+                reply_count: token.reply_count,
+                age_minutes: token.age_minutes,
+                breakout_score: token.breakout_score,
+                lottery_score: token.lottery_score,
+                size_hint: token.size_hint,
+                convergence_label: token.convergence_label,
+                pattern_summary: token.pattern_summary,
+              });
+              alert("Logged WATCH");
+            } catch (e) {
+              alert("Journal failed");
+            }
+          }}
+        >
+          Log watch
+        </button>
+      </div>
       {token.reasons?.length > 0 && (
+
         <ul className="mt-3 space-y-1">
           {token.reasons.slice(0, 4).map((r, i) => (
             <li key={i} className="text-[11px] text-emerald-400/90 flex items-start gap-1.5">
@@ -287,10 +400,9 @@ export default function Dashboard() {
 
   const refresh = useCallback(async () => {
     try {
-      // The feed is the primary terminal data.  Do not hold it hostage to a
-      // second provider-heavy statistics scan.
-      const hawkRes = await api.hawk(35);
+      const [hawkRes, statsRes] = await Promise.all([api.hawk(40), api.stats()]);
       setFeed(hawkRes.results || []);
+      setStats(statsRes);
       setError("");
       setWaking(false);
       setLastUpdate(new Date());
@@ -300,14 +412,6 @@ export default function Dashboard() {
       console.error(e);
     } finally {
       setLoading(false);
-    }
-
-    // Stats are decorative and may require another live scan.  Refresh them
-    // independently so an outage or slow provider never blocks the feed.
-    try {
-      setStats(await api.stats());
-    } catch (e) {
-      console.warn("Stats refresh failed", e);
     }
   }, []);
 

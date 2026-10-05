@@ -159,3 +159,60 @@ if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return _serve_index()
+
+
+from app.intelligence.journal import log_event, set_outcome, list_journal, journal_stats
+from pydantic import BaseModel, Field
+from typing import Optional
+
+
+class JournalIn(BaseModel):
+    action: str
+    address: str
+    ticker: Optional[str] = None
+    ladder: Optional[str] = None
+    entry_state: Optional[str] = None
+    display_score: Optional[float] = None
+    convergence_score: Optional[float] = None
+    reliability: Optional[float] = None
+    hawk_score: Optional[float] = None
+    alpha_score: Optional[float] = None
+    rug_risk: Optional[float] = None
+    market_cap: Optional[float] = None
+    reply_count: Optional[int] = None
+    age_minutes: Optional[float] = None
+    breakout_score: Optional[float] = None
+    lottery_score: Optional[float] = None
+    size_hint: Optional[str] = None
+    notes: Optional[str] = None
+    convergence_label: Optional[str] = None
+    pattern_summary: Optional[str] = None
+
+
+class OutcomeIn(BaseModel):
+    outcome: str
+    exit_mcap: Optional[float] = None
+    notes: Optional[str] = ""
+
+
+@app.post("/api/journal")
+async def journal_log(body: JournalIn):
+    """Log skip / watch / micro_entry / small_entry for calibration."""
+    return log_event(body.model_dump())
+
+
+@app.post("/api/journal/{entry_id}/outcome")
+async def journal_outcome(entry_id: str, body: OutcomeIn):
+    return set_outcome(entry_id, body.outcome, body.exit_mcap, body.notes or "")
+
+
+@app.get("/api/journal")
+async def journal_list(limit: int = Query(default=50, ge=1, le=200)):
+    rows = list_journal(limit)
+    return {"count": len(rows), "results": rows}
+
+
+@app.get("/api/journal/stats")
+async def journal_stats_route():
+    return journal_stats()
+
