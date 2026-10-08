@@ -186,7 +186,7 @@ async def fetch_pumpfun_launches(limit: int = 50) -> list[dict]:
     async with httpx.AsyncClient(timeout=22.0) as client:
         new_raw, active_raw = await asyncio.gather(
             _fetch_pages(client, url, "created_timestamp", pages=2),
-            _fetch_pages(client, url, "last_trade_timestamp", pages=2),
+            _fetch_pages(client, url, "last_trade_timestamp", pages=3),
         )
 
     results: list[dict] = []

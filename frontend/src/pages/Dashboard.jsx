@@ -189,6 +189,11 @@ function TokenCard({ token, rank }) {
         )}
       </div>
 
+      {token.winner_watch && (
+        <span className="rounded-md px-2 py-0.5 text-[10px] border bg-emerald-500/15 border-emerald-500/40 text-emerald-300">
+          {token.runner_label || "RUNNER"} · {token.runner_score}
+        </span>
+      )}
       {token.developer_intel?.serial_deployer && (
         <p className="mt-1 text-[10px] text-rose-400 font-medium">
           SERIAL DEPLOYER · {token.developer_intel?.serial_rug_risk || "ELEVATED"} · {token.developer_intel?.launches_observed || "?"} mints seen

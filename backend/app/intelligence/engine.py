@@ -33,6 +33,7 @@ from app.intelligence.patterns import analyze_patterns
 from app.intelligence.developer import analyze_developer
 from app.intelligence.convergence import score_convergence
 from app.intelligence.reliability import score_reliability
+from app.intelligence.runners import score_runner
 
 EXCLUDED = {
     "SOL", "USDC", "USDT", "WSOL", "BTC", "ETH", "WBTC", "WETH",
@@ -568,6 +569,7 @@ def analyze_token(token: dict) -> dict:
     _creator = (token.get("creator") or "").strip()
     token = {**token, "creator_launch_count_seen": creator_launch_count(_creator)}
     patterns = analyze_patterns(token, vel)
+    runner = score_runner(token, vel, patterns)
     lifecycle = classify_lifecycle(token)
     narrative = analyze_narrative(token)
     org = _organicity(token, vel)
@@ -711,10 +713,16 @@ def analyze_token(token: dict) -> dict:
     )
     # Display score: convergence × reliability × decay (CTO north-star metric)
     display = conv["convergence_score"] * (rel["reliability"] / 100.0) * rel["decay"]
+    # Winner-catch blend: pull display toward runner_score when activity is real
+    rscore = int(runner.get("runner_score") or 0)
+    if rscore >= 55 and int(token.get("reply_count") or 0) >= 5:
+        display = display * 0.55 + rscore * 0.45
+    elif rscore >= 40:
+        display = display * 0.75 + rscore * 0.25
     display = int(max(0, min(100, round(display))))
-    # Blend hawk slightly toward convergence when reliable
+    # Blend hawk slightly toward convergence + runner when reliable
     if rel["reliability"] >= 50:
-        hawk = int(max(0, min(100, round(hawk * 0.7 + conv["convergence_score"] * 0.3))))
+        hawk = int(max(0, min(100, round(hawk * 0.65 + conv["convergence_score"] * 0.20 + rscore * 0.15))))
 
     # Opportunity = hawk adjusted by confidence and entry quality
     opp = hawk * (0.55 + 0.45 * (conf / 100.0))
@@ -885,6 +893,10 @@ def analyze_token(token: dict) -> dict:
         "reliability": rel.get("reliability"),
         "decay": rel.get("decay"),
         "display_score": display,
+        "runner_score": runner.get("runner_score"),
+        "runner_label": runner.get("runner_label"),
+        "runner_notes": runner.get("runner_notes") or [],
+        "winner_watch": runner.get("winner_watch"),
         "missing_channels": rel.get("missing_channels") or [],
         "creator_intel": dev_intel,
     }
@@ -902,23 +914,26 @@ def rank_tokens(tokens: list[dict]) -> list[dict]:
     scored = [t for t in scored if (t.get("hawk_score") or 0) > 0]
 
     def window_rank(x):
-        """Ladder-aware rank: actionable, high lottery, breakout, then rest."""
+        """Prefer actionable + runner candidates; bury silent noise."""
         entry = x.get("entry_state") or ""
         ladder = x.get("ladder") or "NOISE"
         lot = x.get("lottery_score") or 0
         br = x.get("breakout_score") or 0
+        rs = x.get("runner_score") or 0
         if entry in ("EARLY_ENTRY", "CONFIRMATION_ENTRY"):
             return 0
-        if ladder == "BREAKOUT" and br >= 55:
+        if x.get("winner_watch") or rs >= 70:
             return 0
-        if ladder == "LOTTERY" and lot >= 55:
-            return 1  # high-quality lottery near top for earliest vision
-        if ladder == "EARLY":
+        if ladder == "BREAKOUT" and (br >= 55 or rs >= 60):
+            return 1
+        if ladder == "LOTTERY" and lot >= 55 and rs >= 50:
+            return 1
+        if ladder == "EARLY" or (rs >= 55):
             return 2
         if ladder == "BREAKOUT":
-            return 2
-        if ladder == "LOTTERY":
             return 3
+        if ladder == "LOTTERY":
+            return 4
         if ladder == "EXPANSION":
             return 4
         return 5
@@ -928,6 +943,7 @@ def rank_tokens(tokens: list[dict]) -> list[dict]:
             window_rank(x),
             -(x.get("lottery_score") or 0) if (x.get("ladder") == "LOTTERY") else 0,
             -(x.get("breakout_score") or 0),
+            -(x.get("runner_score") or 0),
             -(x.get("display_score") or x.get("opportunity_score") or 0),
             -(x.get("hawk_score") or 0),
             x.get("rug_risk") or 100,
