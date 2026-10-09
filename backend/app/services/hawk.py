@@ -96,6 +96,8 @@ def _public(t: dict) -> dict:
         "runner_score": t.get("runner_score"),
         "runner_label": t.get("runner_label"),
         "winner_watch": t.get("winner_watch"),
+        "volume_watch": t.get("volume_watch"),
+        "attention_watch": t.get("attention_watch"),
         "runner_notes": t.get("runner_notes") or [],
         "developer_intel": t.get("developer_intel"),
         "missing_channels": t.get("missing_channels") or [],
@@ -215,13 +217,15 @@ async def get_radar(kind: str) -> list[dict]:
             for t in feed
             if t.get("operator_priority")
             or t.get("winner_watch")
+            or t.get("volume_watch")
+            or t.get("attention_watch")
             or t.get("ladder") in ("LOTTERY", "EARLY", "BREAKOUT")
-            or (t.get("runner_score") or 0) >= 55
+            or (t.get("runner_score") or 0) >= 52
         ]
         band = [t for t in band if t.get("ladder") != "NOISE" or t.get("winner_watch")]
         band.sort(
             key=lambda x: (
-                0 if x.get("winner_watch") or (x.get("runner_score") or 0) >= 70 else
+                0 if x.get("winner_watch") or x.get("volume_watch") or (x.get("runner_score") or 0) >= 70 else
                 1 if x.get("ladder") == "BREAKOUT" and (x.get("breakout_score") or 0) >= 50 else
                 2 if (x.get("runner_score") or 0) >= 55 else
                 3 if x.get("ladder") == "EARLY" else

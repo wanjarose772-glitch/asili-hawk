@@ -34,6 +34,7 @@ from app.intelligence.developer import analyze_developer
 from app.intelligence.convergence import score_convergence
 from app.intelligence.reliability import score_reliability
 from app.intelligence.runners import score_runner
+from app.intelligence.smart_money import analyze_smart_money
 
 EXCLUDED = {
     "SOL", "USDC", "USDT", "WSOL", "BTC", "ETH", "WBTC", "WETH",
@@ -557,7 +558,7 @@ def analyze_token(token: dict) -> dict:
             "negative_signals": reject,
             "thesis": {},
             "holder_quality": "INSUFFICIENT_DATA",
-            "smart_money": "INSUFFICIENT_DATA",
+            "smart_money": sm,
             "creator_intel": "INSUFFICIENT_DATA",
         }
 
@@ -570,6 +571,7 @@ def analyze_token(token: dict) -> dict:
     token = {**token, "creator_launch_count_seen": creator_launch_count(_creator)}
     patterns = analyze_patterns(token, vel)
     runner = score_runner(token, vel, patterns)
+    sm = analyze_smart_money(token)
     lifecycle = classify_lifecycle(token)
     narrative = analyze_narrative(token)
     org = _organicity(token, vel)
@@ -717,6 +719,8 @@ def analyze_token(token: dict) -> dict:
     rscore = int(runner.get("runner_score") or 0)
     if rscore >= 55 and int(token.get("reply_count") or 0) >= 5:
         display = display * 0.55 + rscore * 0.45
+    elif runner.get("volume_watch"):
+        display = max(display, rscore * 0.85)  # surface silent grad flow
     elif rscore >= 40:
         display = display * 0.75 + rscore * 0.25
     display = int(max(0, min(100, round(display))))
@@ -872,7 +876,7 @@ def analyze_token(token: dict) -> dict:
             if (token.get("holder_intel") or {}).get("data_quality") == "OK"
             else "INSUFFICIENT_DATA"
         ),
-        "smart_money": "INSUFFICIENT_DATA",
+        "smart_money": sm,
         "holder_intel": token.get("holder_intel"),
         "confirmation": confirm,
         "wash": wash,
@@ -897,6 +901,8 @@ def analyze_token(token: dict) -> dict:
         "runner_label": runner.get("runner_label"),
         "runner_notes": runner.get("runner_notes") or [],
         "winner_watch": runner.get("winner_watch"),
+        "volume_watch": runner.get("volume_watch"),
+        "attention_watch": runner.get("attention_watch"),
         "missing_channels": rel.get("missing_channels") or [],
         "creator_intel": dev_intel,
     }
@@ -922,7 +928,7 @@ def rank_tokens(tokens: list[dict]) -> list[dict]:
         rs = x.get("runner_score") or 0
         if entry in ("EARLY_ENTRY", "CONFIRMATION_ENTRY"):
             return 0
-        if x.get("winner_watch") or rs >= 70:
+        if x.get("winner_watch") or x.get("attention_watch") or rs >= 70:
             return 0
         if ladder == "BREAKOUT" and (br >= 55 or rs >= 60):
             return 1

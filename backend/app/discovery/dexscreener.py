@@ -48,7 +48,14 @@ async def enrich_token(address: str) -> dict:
     best = pairs[0]
 
     liq = _safe_float(best.get("liquidity", {}).get("usd"))
-    vol = _safe_float(best.get("volume", {}).get("h24") or best.get("volume", {}).get("h6"))
+    vol_h1 = _safe_float((best.get("volume") or {}).get("h1"))
+    vol_h6 = _safe_float((best.get("volume") or {}).get("h6"))
+    vol_h24 = _safe_float((best.get("volume") or {}).get("h24"))
+    vol = vol_h1 or vol_h6 or vol_h24
+    tx_h1 = best.get("txns", {}).get("h1") or {}
+    buys_h1 = int(tx_h1.get("buys") or 0)
+    sells_h1 = int(tx_h1.get("sells") or 0)
+    chg_h1 = _safe_float((best.get("priceChange") or {}).get("h1"))
     price = _safe_float(best.get("priceUsd"))
     mcap = _safe_float(best.get("marketCap") or best.get("fdv"))
     created = best.get("pairCreatedAt")
@@ -60,6 +67,11 @@ async def enrich_token(address: str) -> dict:
         "price_usd": price,
         "liquidity": liq,
         "volume": vol,
+        "volume_h1": vol_h1,
+        "volume_h6": vol_h6,
+        "buys_h1": buys_h1,
+        "sells_h1": sells_h1,
+        "price_change_h1": chg_h1,
         "market_cap": mcap or None,
         "dex": best.get("dexId"),
         "pair_address": best.get("pairAddress"),

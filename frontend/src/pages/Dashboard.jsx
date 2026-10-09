@@ -189,6 +189,11 @@ function TokenCard({ token, rank }) {
         )}
       </div>
 
+      {token.volume_watch && (
+        <span className="rounded-md px-2 py-0.5 text-[10px] border bg-amber-500/15 border-amber-500/40 text-amber-200">
+          VOLUME_WATCH · {token.runner_score} · micro only
+        </span>
+      )}
       {token.winner_watch && (
         <span className="rounded-md px-2 py-0.5 text-[10px] border bg-emerald-500/15 border-emerald-500/40 text-emerald-300">
           {token.runner_label || "RUNNER"} · {token.runner_score}
