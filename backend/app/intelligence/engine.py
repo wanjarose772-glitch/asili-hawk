@@ -538,6 +538,7 @@ def _breakout_potential(token: dict, hawk: int, rug: int, conf: int, wash_score)
 
 
 def analyze_token(token: dict) -> dict:
+    sm = analyze_smart_money(token)
     reject = _hard_reject(token)
     if reject:
         return {
@@ -560,6 +561,10 @@ def analyze_token(token: dict) -> dict:
             "holder_quality": "INSUFFICIENT_DATA",
             "smart_money": sm,
             "creator_intel": "INSUFFICIENT_DATA",
+            "runner_score": 0,
+            "winner_watch": False,
+            "volume_watch": False,
+            "attention_watch": False,
         }
 
     # Record snapshot for future velocity
@@ -571,7 +576,6 @@ def analyze_token(token: dict) -> dict:
     token = {**token, "creator_launch_count_seen": creator_launch_count(_creator)}
     patterns = analyze_patterns(token, vel)
     runner = score_runner(token, vel, patterns)
-    sm = analyze_smart_money(token)
     lifecycle = classify_lifecycle(token)
     narrative = analyze_narrative(token)
     org = _organicity(token, vel)
