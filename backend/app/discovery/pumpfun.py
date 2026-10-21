@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pump.fun discovery â€” hybrid.
 
 CRITICAL LESSON (live ops):
@@ -154,7 +154,9 @@ async def _fetch_pages(
         for attempt in range(3):
             try:
                 resp = await client.get(url, params=params)
-                if resp.status_code in (401, 403):\n                    return []\n                if resp.status_code != 200:
+                if resp.status_code in (401, 403):
+                    return []
+                if resp.status_code != 200:
                     break
                 data = resp.json()
                 if not isinstance(data, list):
