@@ -1,11 +1,11 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+﻿from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
     app_name: str = "ASILI HAWK"
-    version: str = "2.4.1-hotfix"
-    # Was True by default — fine for local dev, wrong default for a
+    version: str = "2.4.2-discovery"
+    # Was True by default â€” fine for local dev, wrong default for a
     # deployed API (verbose errors/stack traces exposed to callers).
     debug: bool = False
 
@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     solana_tracker_key: str = ""
 
     # Birth-channel window
-    max_age_minutes: int = 360
+    max_age_minutes: int = 1440
     min_curve_progress: float = 3.0
     max_curve_progress: float = 99.5
     min_usd_mcap: float = 400.0
@@ -48,3 +48,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+

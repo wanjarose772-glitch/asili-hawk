@@ -1,4 +1,4 @@
-"""
+﻿"""
 Unified discovery layer.
 Pulls early Pump.fun bonding-curve tokens (primary edge)
 and optionally enriches / merges with DexScreener.
@@ -27,14 +27,14 @@ async def discover_opportunities(
     2. Very recent DexScreener Solana pairs (just listed / graduated)
     """
     pump_task = fetch_pumpfun_launches(limit=limit)
-    dex_task = discover_new_solana_pairs(limit=20)
+    dex_task = discover_new_solana_pairs(limit=40)
     gecko_task = fetch_gecko_new_pools(limit=20)
 
     pump_tokens, dex_tokens, gecko_tokens = await asyncio.gather(
         pump_task, dex_task, gecko_task
     )
 
-    # Pump.fun first — that is the pre-terminal edge
+    # Pump.fun first â€” that is the pre-terminal edge
     merged: list[dict] = []
     seen: set[str] = set()
 
@@ -101,3 +101,4 @@ async def discover_opportunities(
         pass
 
     return merged[:limit]
+

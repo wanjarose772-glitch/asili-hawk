@@ -1,4 +1,4 @@
-"""
+﻿"""
 DexScreener enrichment + early pair discovery.
 Used as secondary signal once tokens appear on terminals,
 and to enrich Pump.fun tokens with price/volume/liquidity.
@@ -123,7 +123,7 @@ async def discover_new_solana_pairs(limit: int = 30) -> list[dict]:
         if not created:
             continue
         age_min = (now_ms - created) / 60_000
-        if age_min > settings.max_age_minutes:
+        if age_min > max(settings.max_age_minutes, getattr(settings, "active_max_age_minutes", 1440)):
             continue
 
         liq = _safe_float(pair.get("liquidity", {}).get("usd"))
@@ -163,3 +163,4 @@ async def discover_new_solana_pairs(limit: int = 30) -> list[dict]:
 
     results.sort(key=lambda t: t.get("age_minutes") or 9999)
     return results[:limit]
+

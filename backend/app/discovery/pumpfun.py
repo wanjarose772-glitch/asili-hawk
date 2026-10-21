@@ -1,5 +1,5 @@
-"""
-Pump.fun discovery — hybrid.
+﻿"""
+Pump.fun discovery â€” hybrid.
 
 CRITICAL LESSON (live ops):
 Sorting only by created_timestamp shows the birth channel: sub-$20k, 0 replies.
@@ -77,7 +77,7 @@ def normalize_coin(coin: dict, *, channel: str = "new") -> dict | None:
     if age_minutes is not None and age_minutes > max_age:
         return None
 
-    # Mcap bands — active channel allows higher (runners past 100k)
+    # Mcap bands â€” active channel allows higher (runners past 100k)
     max_mcap = settings.max_usd_mcap
     if channel == "active":
         max_mcap = max(max_mcap, getattr(settings, "active_max_usd_mcap", 2_000_000))
@@ -154,7 +154,7 @@ async def _fetch_pages(
         for attempt in range(3):
             try:
                 resp = await client.get(url, params=params)
-                if resp.status_code != 200:
+                if resp.status_code in (401, 403):\n                    return []\n                if resp.status_code != 200:
                     break
                 data = resp.json()
                 if not isinstance(data, list):
@@ -192,7 +192,7 @@ async def fetch_pumpfun_launches(limit: int = 50) -> list[dict]:
     results: list[dict] = []
     seen: set[str] = set()
 
-    # Active / running first so survivors past 20–100k are in the pool
+    # Active / running first so survivors past 20â€“100k are in the pool
     for coin in active_raw:
         normalized = normalize_coin(coin, channel="active")
         if not normalized:
@@ -241,3 +241,4 @@ async def fetch_pumpfun_launches(limit: int = 50) -> list[dict]:
 
 def fetch_pumpfun_launches_sync(limit: int = 50) -> list[dict]:
     return asyncio.run(fetch_pumpfun_launches(limit))
+
