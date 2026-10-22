@@ -4,7 +4,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     app_name: str = "ASILI HAWK"
-    version: str = "2.4.2-discovery"
+    version: str = "2.5.0-autojournal"
     # Was True by default â€” fine for local dev, wrong default for a
     # deployed API (verbose errors/stack traces exposed to callers).
     debug: bool = False
@@ -48,4 +48,5 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
 

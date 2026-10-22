@@ -1,4 +1,4 @@
-"""HAWK orchestration — discovery → intelligence → feed."""
+﻿"""HAWK orchestration â€” discovery â†’ intelligence â†’ feed."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from cachetools import TTLCache
+from app.intelligence.auto_journal import auto_journal_tick
 
 from app.config import get_settings
 from app.discovery.aggregator import discover_opportunities
@@ -133,6 +134,10 @@ async def get_hawk_feed(limit: int = 30) -> list[dict]:
 
     ranked.sort(key=_op_key)
     feed = [_public(t) for t in ranked[:limit]]
+    try:
+        auto_journal_tick(feed)
+    except Exception:
+        pass
     _cache[key] = feed
 
     try:
@@ -179,7 +184,7 @@ async def get_radar(kind: str) -> list[dict]:
     if kind == "risk":
         return sorted(feed, key=lambda x: -(x.get("rug_risk") or 0))[:15]
     if kind == "early":
-        # Emerging hybrid band — not ultra-new spam
+        # Emerging hybrid band â€” not ultra-new spam
         return [
             t
             for t in feed
@@ -274,3 +279,4 @@ async def get_stats() -> dict[str, Any]:
         "updated_at": int(time.time()),
         "version": _settings.version,
     }
+

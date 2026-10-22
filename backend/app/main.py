@@ -1,4 +1,4 @@
-"""ASILI HAWK — FastAPI application (production-compatible)."""
+﻿"""ASILI HAWK â€” FastAPI application (production-compatible)."""
 
 from __future__ import annotations
 
@@ -81,13 +81,13 @@ async def focus(limit: int = Query(default=25, ge=1, le=40)):
 
 @app.get("/api/lottery")
 async def lottery(limit: int = Query(default=20, ge=1, le=40)):
-    """Earliest asymmetric band — micro size only, high fail rate expected."""
+    """Earliest asymmetric band â€” micro size only, high fail rate expected."""
     data = await get_radar("lottery")
     return {
         "count": len(data[:limit]),
         "results": data[:limit],
         "band": "LOTTERY",
-        "warning": "HIGH VARIANCE — most go to zero; micro size only. Not financial advice.",
+        "warning": "HIGH VARIANCE â€” most go to zero; micro size only. Not financial advice.",
     }
 
 
@@ -119,6 +119,7 @@ _candidates = [
 ]
 
 from app.intelligence.journal import log_event, set_outcome, list_journal, journal_stats
+from app.intelligence.auto_journal import auto_journal_tick, learning_summary
 from pydantic import BaseModel
 from typing import Optional
 
@@ -173,6 +174,17 @@ async def journal_list(limit: int = Query(default=50, ge=1, le=200)):
 async def journal_stats_route():
     return journal_stats()
 
+@app.get("/api/journal/learning")
+async def journal_learning():
+    return learning_summary()
+
+
+@app.post("/api/journal/auto-tick")
+async def journal_auto_tick():
+    feed = await get_hawk_feed(limit=40)
+    return auto_journal_tick(feed, force=True)
+
+
 
 FRONTEND_DIST = next((p for p in _candidates if p.exists()), _candidates[0])
 
@@ -216,3 +228,4 @@ if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return _serve_index()
+
