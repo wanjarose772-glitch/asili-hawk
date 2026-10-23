@@ -28,7 +28,7 @@ async def enrich_token(address: str) -> dict:
     settings = get_settings()
     url = f"{settings.dexscreener_base}/tokens/v1/solana/{address}"
 
-    async with httpx.AsyncClient(timeout=12.0) as client:
+    async with httpx.AsyncClient(timeout=8.0) as client:
         try:
             resp = await client.get(url)
             if resp.status_code != 200:
@@ -94,7 +94,7 @@ async def discover_new_solana_pairs(limit: int = 30) -> list[dict]:
     url = f"{settings.dexscreener_base}/latest/dex/search"
     params = {"q": "SOL"}
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             resp = await client.get(url, params=params)
             if resp.status_code != 200:

@@ -69,7 +69,7 @@ function StageBadge({ stage, curve, signal }) {
   );
 }
 
-function TokenCard({ token, rank }) {
+function TokenCard({ token, rank, journalWritesEnabled }) {
   const [copied, setCopied] = useState(false);
   const isPrime = (token.hawk_score ?? token.alpha_score ?? 0) >= 82;
   const isHigh = (token.hawk_score ?? token.alpha_score ?? 0) >= 70;
@@ -158,7 +158,7 @@ function TokenCard({ token, rank }) {
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
+      {journalWritesEnabled && <div className="mt-3 flex flex-wrap gap-1.5">
         <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">{token.rating}</span>
         <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[10px] text-slate-500">{token.recommendation}</span>
         {token.entry_state && (
@@ -187,7 +187,7 @@ function TokenCard({ token, rank }) {
             LIVE
           </span>
         )}
-      </div>
+      </div>}
 
       {token.volume_watch && (
         <span className="rounded-md px-2 py-0.5 text-[10px] border bg-amber-500/15 border-amber-500/40 text-amber-200">
@@ -407,12 +407,16 @@ export default function Dashboard() {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [filter, setFilter] = useState("focus");
   const [waking, setWaking] = useState(false);
+  const [journalWritesEnabled, setJournalWritesEnabled] = useState(true);
+  const [snapshotHealth, setSnapshotHealth] = useState(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [hawkRes, statsRes] = await Promise.all([api.hawk(40), api.stats()]);
+      const [hawkRes, statsRes, healthRes] = await Promise.all([api.hawk(40), api.stats(), api.health()]);
       setFeed(hawkRes.results || []);
       setStats(statsRes);
+      setJournalWritesEnabled(healthRes.journal_writes_enabled !== false);
+      setSnapshotHealth(healthRes.snapshot_data || null);
       setError("");
       setWaking(false);
       setLastUpdate(new Date());
@@ -465,6 +469,9 @@ export default function Dashboard() {
     return list;
   }, [feed, filter]);
 
+  const snapshotStatus = snapshotHealth?.status || "unknown";
+  const snapshotAge = snapshotHealth?.age_seconds;
+
   return (
     <div className="min-h-screen hawk-grid">
       <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
@@ -493,10 +500,12 @@ export default function Dashboard() {
             <div className="flex items-center gap-2">
               <span
                 className={`h-2 w-2 rounded-full ${
-                  error ? "bg-amber-400 animate-pulse" : "bg-emerald-400 animate-pulse"
+                  error || snapshotStatus !== "recent" ? "bg-amber-400 animate-pulse" : "bg-emerald-400 animate-pulse"
                 }`}
               />
-              <span className="hidden sm:inline">{error ? "Waking" : "Live"}</span>
+              <span className="hidden sm:inline">
+                {error ? "Waking" : snapshotStatus === "recent" ? "Scan recent" : "Data unverified"}
+              </span>
             </div>
             <button
               onClick={refresh}
@@ -509,6 +518,14 @@ export default function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6">
+        {snapshotStatus !== "recent" && (
+          <div className="mb-4 rounded-lg border border-amber-700/50 bg-amber-950/30 px-4 py-2 text-xs text-amber-200">
+            {snapshotStatus === "stale"
+              ? `Stored scan data is stale (${Math.floor((snapshotAge || 0) / 60)} minutes since the last snapshot).`
+              : "No recent scan snapshot is available; upstream feed freshness is unverified."}
+            {" "}API process health does not guarantee a live market feed.
+          </div>
+        )}
         <section className="mb-6 rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-5">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
             <div>
@@ -564,13 +581,13 @@ export default function Dashboard() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((token, i) => (
-              <TokenCard key={token.address || i} token={token} rank={i + 1} />
+              <TokenCard key={token.address || i} token={token} rank={i + 1} journalWritesEnabled={journalWritesEnabled} />
             ))}
           </div>
         )}
 
         <footer className="mt-14 border-t border-slate-900 pt-8 pb-10 text-center text-[11px] text-slate-600">
-          ASILI HAWK v0.4 · Research only · Not financial advice · Public Pump.fun + DexScreener data
+          ASILI HAWK v2.6.0-market · Research only · Not financial advice · Public market data
         </footer>
       </main>
     </div>

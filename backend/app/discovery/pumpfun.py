@@ -151,7 +151,7 @@ async def _fetch_pages(
             "includeNsfw": "false",
         }
         ok = False
-        for attempt in range(3):
+        for attempt in range(2):
             try:
                 resp = await client.get(url, params=params)
                 if resp.status_code in (401, 403):
@@ -170,7 +170,7 @@ async def _fetch_pages(
             except Exception:
                 if attempt == 2:
                     break
-                await asyncio.sleep(0.4 * (attempt + 1))
+                await asyncio.sleep(0.25 * (attempt + 1))
         if not ok:
             break
     return raw
@@ -185,7 +185,9 @@ async def fetch_pumpfun_launches(limit: int = 50) -> list[dict]:
     settings = get_settings()
     url = f"{settings.pumpfun_base}/coins"
 
-    async with httpx.AsyncClient(timeout=22.0) as client:
+    # A fresh-token scan must not stall the dashboard for a minute when the
+    # public upstream is degraded; one short retry is enough for transient loss.
+    async with httpx.AsyncClient(timeout=10.0) as client:
         new_raw, active_raw = await asyncio.gather(
             _fetch_pages(client, url, "created_timestamp", pages=2),
             _fetch_pages(client, url, "last_trade_timestamp", pages=3),

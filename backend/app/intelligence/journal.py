@@ -186,7 +186,7 @@ def list_journal(limit: int = 50) -> list[dict]:
                 """
                 SELECT id, ts, address, ticker, action, ladder, entry_state,
                        display_score, convergence_score, reliability, hawk_score,
-                       rug_risk, market_cap, reply_count, outcome, multiple, notes
+                       rug_risk, market_cap, reply_count, outcome, multiple, notes, payload
                 FROM journal ORDER BY ts DESC LIMIT ?
                 """,
                 (limit,),
@@ -197,6 +197,43 @@ def list_journal(limit: int = 50) -> list[dict]:
         return rows
     except Exception:
         return []
+
+
+def update_observation(entry_id: str, observation: dict[str, Any]) -> dict[str, Any]:
+    """Persist latest observed mark and high-water market cap for an open entry."""
+    conn = _conn()
+    if not conn:
+        return {"ok": False, "error": "journal_db_unavailable"}
+    try:
+        with _lock:
+            cur = conn.execute("SELECT payload FROM journal WHERE id = ?", (entry_id,))
+            row = cur.fetchone()
+            if not row:
+                conn.close()
+                return {"ok": False, "error": "journal_entry_not_found"}
+            try:
+                payload = json.loads(row[0]) if row[0] else {}
+            except (TypeError, ValueError):
+                payload = {}
+            payload.update(observation)
+            conn.execute("UPDATE journal SET payload = ? WHERE id = ?", (json.dumps(payload), entry_id))
+            conn.commit()
+        conn.close()
+        return {"ok": True}
+    except Exception as e:
+        conn.close()
+        return {"ok": False, "error": str(e)}
+
+
+def export_journal(limit: int = 200) -> dict[str, Any]:
+    """Return a versioned, machine-readable journal export."""
+    rows = list_journal(max(1, min(int(limit), 500)))
+    return {
+        "schema_version": "1.0",
+        "exported_at": time.time(),
+        "count": len(rows),
+        "results": rows,
+    }
 
 
 def journal_stats() -> dict:

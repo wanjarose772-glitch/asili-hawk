@@ -26,7 +26,7 @@ uvicorn app.main:app --reload --port 8000
 
 # Frontend (another terminal)
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -44,7 +44,7 @@ This project is set up so the **dashboard stays online 24/7** without your lapto
 cd asili-hawk
 git init
 git add .
-git commit -m "ASILI HAWK v0.4"
+git commit -m "ASILI HAWK v2.6.0-market"
 # create a new repo on GitHub, then:
 git remote add origin https://github.com/YOUR_USER/asili-hawk.git
 git push -u origin main

@@ -4,10 +4,12 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     app_name: str = "ASILI HAWK"
-    version: str = "2.5.0-autojournal"
+    version: str = "2.6.0-market"
     # Was True by default â€” fine for local dev, wrong default for a
     # deployed API (verbose errors/stack traces exposed to callers).
     debug: bool = False
+    environment: str = "development"
+    operator_api_token: str = ""
 
     pumpfun_base: str = "https://frontend-api-v3.pump.fun"
     dexscreener_base: str = "https://api.dexscreener.com"
@@ -38,9 +40,8 @@ class Settings(BaseSettings):
     # deploy envs whose writable path differs (e.g. a mounted volume).
     db_path: str = "data/hawk_snapshots.db"
 
-    # CORS: comma-separated origins. Defaults to permissive for local/dev use;
-    # set CORS_ORIGINS in production to lock this down.
-    cors_origins: str = "*"
+    # Local frontend origins by default; deployments must set their exact UI origin(s).
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -5,7 +5,7 @@ Learning loop (no live trading).
 from __future__ import annotations
 import json, time
 from typing import Any
-from app.intelligence.journal import journal_stats, list_journal, log_event, set_outcome
+from app.intelligence.journal import journal_stats, list_journal, log_event, set_outcome, update_observation
 
 MIN_RUNNER = 52
 MAX_MCAP_ENTER = 180_000.0
@@ -130,10 +130,24 @@ def mark_and_resolve(feed: list[dict]) -> dict[str, Any]:
         entry_mcap = float(r.get("market_cap") or 0)
         if entry_mcap <= 0:
             continue
-        last = float(tok.get("market_cap") or entry_mcap) if tok else entry_mcap
-        peak = max(entry_mcap, last, float(_payload(r).get("peak_mcap") or entry_mcap))
+        # Never synthesize a mark from the entry quote when a token is absent.
+        # Missing provider data is not evidence that price stayed flat or fell.
+        if not tok or not tok.get("market_cap"):
+            continue
+        last = float(tok["market_cap"])
+        payload = _payload(r)
+        peak = max(entry_mcap, last, float(payload.get("peak_mcap") or entry_mcap))
+        observation_ts = now
+        update_observation(r["id"], {
+            "last_observed_mcap": last,
+            "last_observed_ts": observation_ts,
+            "peak_mcap": peak,
+            "peak_observed_ts": payload.get("peak_observed_ts", observation_ts if last >= peak else None),
+        })
         age_sec = now - float(r.get("ts") or now)
         tracked += 1
+        # Time-based closure requires a fresh observation; stale/missing feed
+        # entries remain open and cannot be counted as losses.
         outcome, mult = _classify_outcome(entry_mcap, peak, last, age_sec)
         if not outcome:
             continue

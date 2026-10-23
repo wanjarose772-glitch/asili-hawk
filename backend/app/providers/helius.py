@@ -31,7 +31,7 @@ async def _rpc(method: str, params: list | dict) -> Any | None:
         return None
     payload = {"jsonrpc": "2.0", "id": "hawk", "method": method, "params": params}
     try:
-        async with httpx.AsyncClient(timeout=18.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(url, json=payload)
             if resp.status_code != 200:
                 return None
@@ -196,7 +196,7 @@ async def get_recent_tx_intel(address: str, limit: int = 40) -> dict[str, Any]:
     url = f"https://api.helius.xyz/v0/addresses/{address}/transactions"
     params = {"api-key": key, "limit": min(limit, 50)}
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(url, params=params)
             if resp.status_code != 200:
                 return {
