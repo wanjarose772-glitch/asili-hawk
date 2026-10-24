@@ -1,5 +1,4 @@
 import sqlite3
-import json
 
 from app.intelligence import store
 
@@ -53,22 +52,3 @@ def test_legacy_snapshot_schema_is_migrated_in_place(tmp_path, monkeypatch):
     store.record_snapshot({"address": "LEGACY", "market_cap": 123, "hawk_score": 77, "rug_risk": 12})
     history = store.load_history("LEGACY", limit=1)
     assert history[0]["mcap"] == 123
-    conn = sqlite3.connect(db)
-    payload = json.loads(conn.execute("SELECT payload FROM snapshots WHERE address = ?", ("LEGACY",)).fetchone()[0])
-    conn.close()
-    assert payload["hawk_score"] == 77
-    assert payload["score_version"] == "2.6.0-market"
-
-
-def test_snapshot_health_distinguishes_recent_from_stale(tmp_path, monkeypatch):
-    db = tmp_path / "health.db"
-    monkeypatch.setattr(store, "_db_candidates", lambda: [db])
-    now = [1_800_000_000.0]
-    monkeypatch.setattr(store.time, "time", lambda: now[0])
-    store.record_snapshot({"address": "11111111111111111111111111111111", "market_cap": 10_000})
-
-    assert store.snapshot_health()["status"] == "recent"
-    now[0] += 1_000
-    status = store.snapshot_health()
-    assert status["status"] == "stale"
-    assert status["observations"] == 1

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unified discovery layer.
 Pulls early Pump.fun bonding-curve tokens (primary edge)
 and optionally enriches / merges with DexScreener.
@@ -13,6 +13,7 @@ from app.discovery.pumpfun import fetch_pumpfun_launches
 from app.discovery.dexscreener import enrich_token, discover_new_solana_pairs
 from app.discovery.geckoterminal import fetch_gecko_new_pools
 from app.providers.helius import enrich_holders, enrich_tx_intel
+from app.services.live_status import record_source, record_discover_count
 
 
 async def discover_opportunities(
@@ -28,26 +29,39 @@ async def discover_opportunities(
     """
     pump_task = fetch_pumpfun_launches(limit=limit)
     dex_task = discover_new_solana_pairs(limit=40)
-    gecko_task = fetch_gecko_new_pools(limit=20)
+    gecko_task = fetch_gecko_new_pools(limit=25)
 
     pump_tokens, dex_tokens, gecko_tokens = await asyncio.gather(
         pump_task, dex_task, gecko_task
     )
 
-    # Pump.fun first â€” that is the pre-terminal edge
+    # Honest discovery status for /api/health
+    try:
+        record_source("pump", ok=bool(pump_tokens), code=200 if pump_tokens else 403,
+                      detail="ok" if pump_tokens else "empty_or_blocked")
+        record_source("dex", ok=bool(dex_tokens), code=200 if dex_tokens else 0,
+                      detail="ok" if dex_tokens else "empty")
+        record_source("gecko", ok=bool(gecko_tokens), code=200 if gecko_tokens else 0,
+                      detail="ok" if gecko_tokens else "empty")
+    except Exception:
+        pass
+
+    # If Pump is empty (403/block), Dex/Gecko become primary — keep board alive
     merged: list[dict] = []
     seen: set[str] = set()
+    primary = pump_tokens if pump_tokens else (list(dex_tokens or []) + list(gecko_tokens or []))
+    secondary = (list(dex_tokens or []) + list(gecko_tokens or [])) if pump_tokens else list(pump_tokens or [])
 
-    for t in pump_tokens:
-        addr = t["address"]
-        if addr in seen:
+    for t in primary:
+        addr = t.get("address") or ""
+        if not addr or addr in seen:
             continue
         seen.add(addr)
         merged.append(t)
 
-    for t in list(dex_tokens) + list(gecko_tokens or []):
-        addr = t["address"]
-        if addr in seen:
+    for t in secondary:
+        addr = t.get("address") or ""
+        if not addr or addr in seen:
             continue
         seen.add(addr)
         merged.append(t)
@@ -100,5 +114,9 @@ async def discover_opportunities(
     except Exception:
         pass
 
-    return merged[:limit]
-
+    # Prefer any non-empty feed when Pump is blocked
+    try:
+        record_discover_count(len(merged))
+    except Exception:
+        pass
+    return merged[: max(limit, 40)] if merged else []

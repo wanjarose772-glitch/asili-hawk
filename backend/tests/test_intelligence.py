@@ -1,15 +1,7 @@
 """Adversarial + unit tests for Hawk intelligence."""
 
-import pytest
-
-from app.intelligence import store as snapshot_store
 from app.intelligence.engine import analyze_token, rank_tokens
 from app.intelligence.lifecycle import classify_lifecycle
-
-
-@pytest.fixture(autouse=True)
-def isolate_snapshot_store(tmp_path, monkeypatch):
-    monkeypatch.setattr(snapshot_store, "_db_candidates", lambda: [tmp_path / "snapshots.db"])
 
 
 def _base(**kw):
@@ -103,8 +95,7 @@ def test_rank_orders_by_opportunity():
 def test_insufficient_data_fields():
     t = analyze_token(_base())
     assert t["holder_quality"] == "INSUFFICIENT_DATA"
-    assert isinstance(t["smart_money"], dict)
-    assert t["smart_money"]["data_quality"] == "INSUFFICIENT_DATA"
+    assert t["smart_money"] == "INSUFFICIENT_DATA"
     # creator_intel is now structured developer analysis (may be LIMITED/OK)
     ci = t.get("creator_intel")
     assert ci == "INSUFFICIENT_DATA" or isinstance(ci, dict)
@@ -175,16 +166,14 @@ def test_wash_insufficient():
     assert r["data_quality"] == "INSUFFICIENT_DATA"
 
 
-def test_store_snapshot_roundtrip(tmp_path, monkeypatch):
-    from app.intelligence import store
+def test_store_snapshot_roundtrip():
+    from app.intelligence.store import record_snapshot, load_history, _db_path
     import time
 
-    db = tmp_path / "roundtrip.db"
-    monkeypatch.setattr(store, "_db_candidates", lambda: [db])
-    if store._db_path() is None:
+    if _db_path() is None:
         return  # environment cannot open sqlite — skip
     addr = f"TestMint{int(time.time()*1000)}"
-    store.record_snapshot(
+    record_snapshot(
         {
             "address": addr,
             "market_cap": 5000,
@@ -195,7 +184,7 @@ def test_store_snapshot_roundtrip(tmp_path, monkeypatch):
             "ticker": "T",
         }
     )
-    hist = store.load_history(addr, limit=5)
+    hist = load_history(addr, limit=5)
     # Best-effort persistence; do not fail the suite if FS is restricted
     if hist:
         assert hist[-1]["mcap"] == 5000

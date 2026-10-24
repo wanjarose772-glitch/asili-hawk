@@ -27,4 +27,8 @@ export default {
   journalStats: () => get("/api/journal/stats"),
   logJournal: (body) => post("/api/journal", body),
   logOutcome: (id, body) => post(`/api/journal/${id}/outcome`, body),
+  journalLearning: () => get("/api/journal/learning"),
+  journalExport: (limit = 200) => get(`/api/journal/export?limit=${limit}`),
+  autoTick: () => post("/api/journal/auto-tick", {}),
 };
+

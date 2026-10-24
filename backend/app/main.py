@@ -1,18 +1,19 @@
-﻿"""ASILI HAWK â€” FastAPI application (production-compatible)."""
+"""ASILI HAWK — FastAPI application (production-compatible)."""
 
 from __future__ import annotations
 
-import hmac
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, ORJSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.services.hawk import get_hawk_feed, get_prime, get_radar, get_stats, get_top5
-from app.intelligence.store import snapshot_health
+from app.intelligence.journal import log_event, set_outcome, list_journal, journal_stats
+from app.intelligence.auto_journal import auto_journal_tick, learning_summary, export_bundle
+from app.services.live_status import get_live_status, token_to_dossier
 
 settings = get_settings()
 
@@ -20,9 +21,6 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.version,
     default_response_class=ORJSONResponse,
-    docs_url="/docs" if settings.environment.lower() == "development" else None,
-    redoc_url="/redoc" if settings.environment.lower() == "development" else None,
-    openapi_url="/openapi.json" if settings.environment.lower() == "development" else None,
 )
 
 _cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
@@ -42,16 +40,17 @@ app.add_middleware(
 
 @app.api_route("/api/health", methods=["GET", "HEAD"])
 async def health():
+    js = journal_stats()
+    learn = learning_summary()
     return {
         "status": "online",
         "name": settings.app_name,
         "version": settings.version,
-        "environment": settings.environment,
-        # The shipped dashboard can write only in local development; it does
-        # not retain or expose the production operator secret in the browser.
-        "journal_writes_enabled": settings.environment.lower() == "development",
-        "operator_api_protected": settings.environment.lower() != "development" and bool(settings.operator_api_token),
-        "snapshot_data": snapshot_health(),
+        "journal_entries": js.get("entries", 0),
+        "auto_open": learn.get("auto_open_now"),
+        "auto_closed": learn.get("auto_closed"),
+        "hit_rate": learn.get("hit_rate"),
+        "mode": "paper_journal",
     }
 
 
@@ -78,6 +77,14 @@ async def prime(limit: int = Query(default=10, ge=1, le=25)):
     return {"count": len(data), "results": data}
 
 
+@app.get("/api/dossiers")
+async def dossiers(limit: int = Query(default=15, ge=1, le=40)):
+    """Operator dossiers — social/narrative null until those modules exist."""
+    data = await get_radar("focus")
+    out = [token_to_dossier(x) for x in data[:limit]]
+    return {"count": len(out), "results": out}
+
+
 @app.get("/api/focus")
 async def focus(limit: int = Query(default=25, ge=1, le=40)):
     """Private operator board: LOTTERY + EARLY + BREAKOUT only."""
@@ -92,13 +99,13 @@ async def focus(limit: int = Query(default=25, ge=1, le=40)):
 
 @app.get("/api/lottery")
 async def lottery(limit: int = Query(default=20, ge=1, le=40)):
-    """Earliest asymmetric band â€” micro size only, high fail rate expected."""
+    """Earliest asymmetric band — micro size only, high fail rate expected."""
     data = await get_radar("lottery")
     return {
         "count": len(data[:limit]),
         "results": data[:limit],
         "band": "LOTTERY",
-        "warning": "HIGH VARIANCE â€” most go to zero; micro size only. Not financial advice.",
+        "warning": "HIGH VARIANCE — most go to zero; micro size only. Not financial advice.",
     }
 
 
@@ -129,8 +136,6 @@ _candidates = [
     Path("/app/frontend/dist"),
 ]
 
-from app.intelligence.journal import log_event, set_outcome, list_journal, journal_stats, export_journal
-from app.intelligence.auto_journal import auto_journal_tick, learning_summary
 from pydantic import BaseModel
 from typing import Optional
 
@@ -164,65 +169,45 @@ class OutcomeIn(BaseModel):
     notes: Optional[str] = ""
 
 
-def _require_operator(token: Optional[str]) -> None:
-    """Keep local development frictionless; require an explicit secret in deployments."""
-    if settings.environment.lower() == "development":
-        return
-    if not settings.operator_api_token:
-        raise HTTPException(status_code=503, detail="Operator writes are disabled: configure OPERATOR_API_TOKEN")
-    if not token or not hmac.compare_digest(token, settings.operator_api_token):
-        raise HTTPException(status_code=401, detail="Invalid or missing operator token")
-
-
 @app.post("/api/journal")
-async def journal_log(body: JournalIn, x_operator_token: Optional[str] = Header(default=None)):
+async def journal_log(body: JournalIn):
     """Log skip / watch / micro_entry / small_entry for calibration."""
-    _require_operator(x_operator_token)
     return log_event(body.model_dump())
 
 
 @app.post("/api/journal/{entry_id}/outcome")
-async def journal_outcome(entry_id: str, body: OutcomeIn, x_operator_token: Optional[str] = Header(default=None)):
-    _require_operator(x_operator_token)
+async def journal_outcome(entry_id: str, body: OutcomeIn):
     return set_outcome(entry_id, body.outcome, body.exit_mcap, body.notes or "")
 
 
 @app.get("/api/journal")
-async def journal_list(
-    limit: int = Query(default=50, ge=1, le=200),
-    x_operator_token: Optional[str] = Header(default=None),
-):
-    _require_operator(x_operator_token)
+async def journal_list(limit: int = Query(default=50, ge=1, le=200)):
     rows = list_journal(limit)
     return {"count": len(rows), "results": rows}
 
 
 @app.get("/api/journal/stats")
-async def journal_stats_route(x_operator_token: Optional[str] = Header(default=None)):
-    _require_operator(x_operator_token)
+async def journal_stats_route():
     return journal_stats()
 
+
 @app.get("/api/journal/learning")
-async def journal_learning(x_operator_token: Optional[str] = Header(default=None)):
-    _require_operator(x_operator_token)
+async def journal_learning():
+    """Auto paper-journal learning summary."""
     return learning_summary()
 
 
-@app.get("/api/journal/export")
-async def journal_export(
-    limit: int = Query(default=200, ge=1, le=500),
-    x_operator_token: Optional[str] = Header(default=None),
-):
-    _require_operator(x_operator_token)
-    return export_journal(limit)
-
-
 @app.post("/api/journal/auto-tick")
-async def journal_auto_tick(x_operator_token: Optional[str] = Header(default=None)):
-    _require_operator(x_operator_token)
+async def journal_auto_tick():
+    """Force one auto-journal cycle against current hawk feed."""
     feed = await get_hawk_feed(limit=40)
-    return auto_journal_tick(feed, force=True)
+    return await auto_journal_tick(feed, force=True)
 
+
+@app.get("/api/journal/export")
+async def journal_export(limit: int = Query(default=200, ge=1, le=500)):
+    """Full journal + learning snapshot for backup / GitHub."""
+    return export_bundle(limit)
 
 
 FRONTEND_DIST = next((p for p in _candidates if p.exists()), _candidates[0])
@@ -267,4 +252,3 @@ if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return _serve_index()
-

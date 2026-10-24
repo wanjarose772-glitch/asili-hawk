@@ -1,15 +1,13 @@
-﻿from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
     app_name: str = "ASILI HAWK"
-    version: str = "2.6.0-market"
-    # Was True by default â€” fine for local dev, wrong default for a
+    version: str = "2.6.1-live-merge"
+    # Was True by default — fine for local dev, wrong default for a
     # deployed API (verbose errors/stack traces exposed to callers).
     debug: bool = False
-    environment: str = "development"
-    operator_api_token: str = ""
 
     pumpfun_base: str = "https://frontend-api-v3.pump.fun"
     dexscreener_base: str = "https://api.dexscreener.com"
@@ -19,7 +17,7 @@ class Settings(BaseSettings):
     solana_tracker_key: str = ""
 
     # Birth-channel window
-    max_age_minutes: int = 1440
+    max_age_minutes: int = 360
     min_curve_progress: float = 3.0
     max_curve_progress: float = 99.5
     min_usd_mcap: float = 400.0
@@ -40,8 +38,9 @@ class Settings(BaseSettings):
     # deploy envs whose writable path differs (e.g. a mounted volume).
     db_path: str = "data/hawk_snapshots.db"
 
-    # Local frontend origins by default; deployments must set their exact UI origin(s).
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    # CORS: comma-separated origins. Defaults to permissive for local/dev use;
+    # set CORS_ORIGINS in production to lock this down.
+    cors_origins: str = "*"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -49,5 +48,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-
-

@@ -11,7 +11,6 @@ Falls back silently if DB cannot be opened.
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
 import time
 from pathlib import Path
@@ -19,7 +18,6 @@ from threading import Lock
 from typing import Any
 
 _lock = Lock()
-_SOLANA_MINT = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
 
 
 def _db_candidates() -> list[Path]:
@@ -42,6 +40,10 @@ def _db_candidates() -> list[Path]:
     except Exception:
         pass
     candidates = [configured]
+    # Render persistent disk convention
+    var_data = Path("/var/data/hawk_snapshots.db")
+    if var_data.parent.exists() and var_data not in candidates:
+        candidates.insert(0, var_data)
     fallback = Path("/tmp/asili_hawk_snapshots.db")
     if fallback not in candidates:
         candidates.append(fallback)
@@ -113,28 +115,6 @@ def record_snapshot(token: dict) -> None:
     addr = token.get("address")
     if not addr:
         return
-    try:
-        from app.config import get_settings
-        score_version = get_settings().version
-    except Exception:
-        score_version = "unknown"
-    snapshot_payload = {
-        "ticker": token.get("ticker"),
-        "stage": token.get("stage"),
-        "lifecycle": token.get("lifecycle"),
-        "signal": token.get("signal"),
-        "recommendation": token.get("recommendation"),
-        "entry_state": token.get("entry_state"),
-        "ladder": token.get("ladder"),
-        "hawk_score": token.get("hawk_score") or token.get("alpha_score"),
-        "display_score": token.get("display_score"),
-        "focus_score": token.get("focus_score"),
-        "runner_score": token.get("runner_score"),
-        "convergence_score": token.get("convergence_score"),
-        "reliability": token.get("reliability"),
-        "rug_risk": token.get("rug_risk"),
-        "score_version": score_version,
-    }
     row = (
         addr,
         time.time(),
@@ -147,7 +127,13 @@ def record_snapshot(token: dict) -> None:
         float(token.get("hawk_score") or token.get("alpha_score") or 0)
         if (token.get("hawk_score") or token.get("alpha_score")) is not None
         else None,
-        json.dumps(snapshot_payload)[:2000],
+        json.dumps(
+            {
+                "ticker": token.get("ticker"),
+                "stage": token.get("stage"),
+                "lifecycle": token.get("lifecycle"),
+            }
+        )[:500],
     )
     try:
         with _lock:
@@ -205,40 +191,6 @@ def load_history(address: str, limit: int = 20) -> list[dict]:
         ]
     except Exception:
         return []
-
-
-def snapshot_health() -> dict[str, Any]:
-    """Report persisted scan recency without treating process health as feed health."""
-    path = _db_path()
-    if not path:
-        return {"status": "unavailable", "observations": 0, "latest_snapshot_ts": None, "age_seconds": None}
-    try:
-        with _lock:
-            conn = sqlite3.connect(str(path), timeout=5)
-            rows = conn.execute("SELECT address, ts FROM snapshots WHERE mcap > 0").fetchall()
-            conn.close()
-        valid_rows = [(address, float(ts)) for address, ts in rows if _SOLANA_MINT.fullmatch(address or "")]
-        count = len(valid_rows)
-        tracked_mints = len({address for address, _ in valid_rows})
-        latest = max((ts for _, ts in valid_rows), default=None)
-        if not latest:
-            return {"status": "no_observations", "observations": count, "tracked_mints": tracked_mints, "latest_snapshot_ts": None, "age_seconds": None}
-        age = max(0.0, time.time() - float(latest))
-        try:
-            from app.config import get_settings
-            stale_after = max(90, int(get_settings().cache_ttl_seconds) * 3)
-        except Exception:
-            stale_after = 90
-        return {
-            "status": "recent" if age <= stale_after else "stale",
-            "observations": count,
-            "tracked_mints": tracked_mints,
-            "latest_snapshot_ts": float(latest),
-            "age_seconds": round(age, 1),
-            "stale_after_seconds": stale_after,
-        }
-    except Exception:
-        return {"status": "unavailable", "observations": 0, "latest_snapshot_ts": None, "age_seconds": None}
 
 
 def creator_launch_count_db(creator: str) -> int:

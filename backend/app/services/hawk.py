@@ -1,8 +1,7 @@
-﻿"""HAWK orchestration â€” discovery â†’ intelligence â†’ feed."""
+"""HAWK orchestration — discovery → intelligence → feed."""
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import Any
 
@@ -16,7 +15,6 @@ from app.services.alerts import scan_and_alert
 
 _settings = get_settings()
 _cache: TTLCache = TTLCache(maxsize=16, ttl=max(18, _settings.cache_ttl_seconds))
-_scan_lock = asyncio.Lock()
 
 
 def _public(t: dict) -> dict:
@@ -115,21 +113,9 @@ def _public(t: dict) -> dict:
 
 async def get_hawk_feed(limit: int = 30) -> list[dict]:
     """Private-operator default: rank by focus, surface ladder names first."""
-    # All normal dashboard/API views share a 40-token scan. This avoids
-    # duplicate upstream polling for slightly different requested limits.
-    scan_limit = max(40, limit)
-    key = f"hawk:{scan_limit}"
+    key = f"hawk:{limit}"
     if key in _cache:
-        return _cache[key][:limit]
-
-    async with _scan_lock:
-        if key in _cache:
-            return _cache[key][:limit]
-        scanned = await _scan_hawk_feed(scan_limit, key)
-        return scanned[:limit]
-
-
-async def _scan_hawk_feed(limit: int, key: str) -> list[dict]:
+        return _cache[key]
 
     raw = await discover_opportunities(limit=max(limit + 40, 80), enrich=True)
     ranked = rank_tokens(raw)
@@ -149,7 +135,7 @@ async def _scan_hawk_feed(limit: int, key: str) -> list[dict]:
     ranked.sort(key=_op_key)
     feed = [_public(t) for t in ranked[:limit]]
     try:
-        auto_journal_tick(feed)
+        await auto_journal_tick(feed)
     except Exception:
         pass
     _cache[key] = feed
@@ -198,7 +184,7 @@ async def get_radar(kind: str) -> list[dict]:
     if kind == "risk":
         return sorted(feed, key=lambda x: -(x.get("rug_risk") or 0))[:15]
     if kind == "early":
-        # Emerging hybrid band â€” not ultra-new spam
+        # Emerging hybrid band — not ultra-new spam
         return [
             t
             for t in feed
@@ -293,4 +279,3 @@ async def get_stats() -> dict[str, Any]:
         "updated_at": int(time.time()),
         "version": _settings.version,
     }
-

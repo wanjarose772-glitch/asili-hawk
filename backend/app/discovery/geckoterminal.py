@@ -24,7 +24,7 @@ async def fetch_gecko_new_pools(limit: int = 25) -> list[dict]:
     settings = get_settings()
     out: list[dict] = []
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=18.0) as client:
             resp = await client.get(
                 GECKO_URL,
                 headers={"Accept": "application/json"},
